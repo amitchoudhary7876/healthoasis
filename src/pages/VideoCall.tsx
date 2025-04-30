@@ -6,6 +6,7 @@ import {
   CircularProgress,
   Snackbar,
   Avatar,
+  Typography,
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import MicIcon from '@mui/icons-material/Mic';
@@ -13,6 +14,12 @@ import MicOffIcon from '@mui/icons-material/MicOff';
 import VideocamIcon from '@mui/icons-material/Videocam';
 import VideocamOffIcon from '@mui/icons-material/VideocamOff';
 import CallEndIcon from '@mui/icons-material/CallEnd';
+import { v4 as uuidv4 } from 'uuid';
+import { ZegoExpressEngine } from 'zego-express-engine-webrtc';
+
+// ZegoCloud App ID and AppSign (replace with your actual credentials)
+const ZEGO_APP_ID = 64275671; // Replace with your ZegoCloud App ID
+const ZEGO_SERVER_SECRET = '2d4a5430b8b2633e9e3d04231c17fde9'; // Replace with your ZegoCloud Server Secret
 
 const VideoCall = () => {
   const { roomId } = useParams();
@@ -20,9 +27,10 @@ const VideoCall = () => {
 
   const localVideo = useRef<HTMLVideoElement>(null);
   const remoteVideo = useRef<HTMLVideoElement>(null);
-  const peerConnection = useRef<RTCPeerConnection | null>(null);
+  const zegoEngine = useRef<any>(null);
   const socket = useRef<any>(null);
   const localStream = useRef<MediaStream | null>(null);
+  const userId = useRef<string>(uuidv4());
 
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
@@ -36,61 +44,70 @@ const VideoCall = () => {
   const [remoteUser, setRemoteUser] = useState({ name: "Connecting...", avatar: "" });
 
   useEffect(() => {
-    socket.current = io('http://localhost:3000');
+    // Use the deployed backend URL for socket connection
+    const API_URL = import.meta.env.VITE_REACT_APP_API_URL || 'https://healthoasis-backendf.onrender.com';
+    socket.current = io(API_URL);
 
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
-      localStream.current = stream;
-      if (localVideo.current) localVideo.current.srcObject = stream;
-
-      peerConnection.current = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-      });
-
-      stream.getTracks().forEach(track => {
-        peerConnection.current!.addTrack(track, stream);
-      });
-
-      peerConnection.current.ontrack = event => {
-        if (remoteVideo.current) {
-          remoteVideo.current.srcObject = event.streams[0];
+    // Initialize ZegoCloud engine
+    zegoEngine.current = new ZegoExpressEngine(ZEGO_APP_ID, ZEGO_SERVER_SECRET);
+    
+    // Log in to ZegoCloud with a unique user ID
+    zegoEngine.current.loginRoom(
+      roomId as string,
+      userId.current,
+      { userID: userId.current, userName: localUser.name },
+      { userUpdate: true }
+    ).then(() => {
+      console.log('Successfully logged into ZegoCloud room:', roomId);
+      
+      // Create a local stream and publish
+      navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+        localStream.current = stream;
+        if (localVideo.current) {
+          localVideo.current.srcObject = stream;
+          // Preview local stream
+          zegoEngine.current.startPreview(localVideo.current as HTMLElement);
         }
-      };
-
-      peerConnection.current.onicecandidate = event => {
-        if (event.candidate) {
-          socket.current.emit('signal', { roomId, signalData: { candidate: event.candidate } });
-        }
-      };
-
-      socket.current.emit('join-room', { roomId });
-
-      socket.current.on('user-joined', async (userInfo: any) => {
-        const offer = await peerConnection.current!.createOffer();
-        await peerConnection.current!.setLocalDescription(offer);
-        socket.current.emit('signal', { roomId, signalData: { offer } });
-
-        if (userInfo?.name) {
-          setRemoteUser(userInfo);
-        }
-
+        // Publish local stream
+        zegoEngine.current.startPublishingStream(userId.current, stream);
         setIsLoading(false);
+      }).catch(error => {
+        console.error('Failed to get user media:', error);
+        setSnackbarMessage('Failed to access camera or microphone. Please check your permissions.');
       });
-
-      socket.current.on('signal', async ({ signalData, userInfo }) => {
-        if (userInfo?.name) setRemoteUser(userInfo);
-
-        if (signalData.offer) {
-          await peerConnection.current!.setRemoteDescription(new RTCSessionDescription(signalData.offer));
-          const answer = await peerConnection.current!.createAnswer();
-          await peerConnection.current!.setLocalDescription(answer);
-          socket.current.emit('signal', { roomId, signalData: { answer } });
-        } else if (signalData.answer) {
-          await peerConnection.current!.setRemoteDescription(new RTCSessionDescription(signalData.answer));
-        } else if (signalData.candidate) {
-          await peerConnection.current!.addIceCandidate(new RTCIceCandidate(signalData.candidate));
+      
+      // Listen for remote user streams
+      zegoEngine.current.on('roomStreamUpdate', ({ type, streamList }: any) => {
+        if (type === 'ADD') {
+          const remoteStream = streamList[0];
+          if (remoteStream && remoteVideo.current) {
+            // Play the remote stream
+            zegoEngine.current.startPlayingStream(
+              remoteStream.streamID,
+              remoteVideo.current as HTMLElement
+            );
+            
+            // Update remote user info
+            setRemoteUser({
+              name: remoteStream.user.userName || 'Remote User',
+              avatar: ''
+            });
+          }
+        } else if (type === 'DELETE') {
+          // Remote user left
+          setSnackbarMessage('Remote user has left the call.');
         }
       });
-
+      
+      // Handle errors
+      zegoEngine.current.on('roomError', (error: any) => {
+        console.error('ZegoCloud room error:', error);
+        setSnackbarMessage(`Connection error: ${error.code}`);
+      });
+      
+    }).catch((error: any) => {
+      console.error('Failed to join ZegoCloud room:', error);
+      setSnackbarMessage('Failed to join video call room. Please try again.');
     });
 
     const timer = setInterval(() => {
@@ -108,6 +125,9 @@ const VideoCall = () => {
       const audioTrack = localStream.current.getAudioTracks()[0];
       audioTrack.enabled = !audioTrack.enabled;
       setIsMuted(!audioTrack.enabled);
+      
+      // Update ZegoCloud audio settings
+      zegoEngine.current.mutePublishStreamAudio(userId.current, !audioTrack.enabled);
     }
   };
 
@@ -116,16 +136,41 @@ const VideoCall = () => {
       const videoTrack = localStream.current.getVideoTracks()[0];
       videoTrack.enabled = !videoTrack.enabled;
       setIsCameraOff(!videoTrack.enabled);
+      
+      // Update ZegoCloud video settings
+      zegoEngine.current.mutePublishStreamVideo(userId.current, !videoTrack.enabled);
     }
   };
 
   const endCall = () => {
+    // Stop local tracks
     localStream.current?.getTracks().forEach(track => track.stop());
-    peerConnection.current?.close();
+    
+    // Log out from ZegoCloud room
+    if (zegoEngine.current) {
+      zegoEngine.current.stopPublishingStream(userId.current);
+      zegoEngine.current.logoutRoom(roomId as string);
+      zegoEngine.current.destroyStream(localStream.current);
+    }
+    
+    // Disconnect socket
     socket.current?.disconnect();
 
-    // TODO: Save to call log via backend here
-    // axios.post('/api/log-call', { duration, participants })
+    // Log call end to backend
+    const API_URL = import.meta.env.VITE_REACT_APP_API_URL || 'https://healthoasis-backendf.onrender.com';
+    fetch(`${API_URL}/api/video-calls/end`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        roomId,
+        endTime: new Date(),
+        duration: callDuration
+      }),
+    }).catch(error => {
+      console.error('Error logging call end:', error);
+    });
 
     navigate('/');
     setSnackbarMessage('Call ended.');
@@ -133,6 +178,7 @@ const VideoCall = () => {
 
   const joinRoom = () => {
     setIsRequestPopupVisible(false);
+    // User info will be sent to ZegoCloud when logging in
     socket.current.emit('join-room', { roomId, userInfo: localUser });
   };
 
