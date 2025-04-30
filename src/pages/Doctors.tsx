@@ -4,7 +4,7 @@ import Layout from '@/components/layout/Layout';
 import PageHeader from '@/components/common/PageHeader';
 import ZegoCall from '@/components/videocall/ZegoCall';
 
-const API_URL = import.meta.env.VITE_REACT_APP_API_URL;
+const API_URL = import.meta.env.VITE_REACT_APP_API_URL || 'https://healthoasis-backendf.onrender.com';
 
 // Fallback image URL
 const fallbackImage = 'https://placehold.co/300x400?text=No+Image';
@@ -26,8 +26,19 @@ const DoctorCard = ({ id, name, specialty, image, availability = 'available' }: 
   const handleVideoCall = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    // Show loading state to user
+    const loadingToast = window.confirm('Initiating video call. Would you like to notify the doctor by email?');
+    if (!loadingToast) {
+      // User chose not to notify, just open the call
+      setShowVideoCall(true);
+      return;
+    }
+    
     // Notify doctor by email before opening video call
     try {
+      console.log(`Sending notification to doctor ${id} (${name})`);
+      
       const res = await fetch(`${API_URL}/api/notify-doctor`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -35,17 +46,26 @@ const DoctorCard = ({ id, name, specialty, image, availability = 'available' }: 
           doctorEmail: 'adishsingla64@gmail.com', // Replace with dynamic doctor email if available
           doctorName: name,
           patientName: 'Patient', // Replace with actual patient name if available
-          doctorId: id
+          doctorId: id,
+          patientId: 1 // TODO: Replace with actual logged-in patient ID
         })
       });
+      
+      const data = await res.json();
+      
       if (res.ok) {
-        alert('Doctor notified by email!');
+        console.log('Doctor notification successful:', data);
+        alert('Doctor notified by email! Starting video call...');
       } else {
-        alert('Failed to notify doctor by email.');
+        console.error('Doctor notification failed:', data);
+        alert(`Failed to notify doctor: ${data.message || 'Unknown error'}. Starting video call anyway...`);
       }
     } catch (err) {
-      alert('Error notifying doctor by email.');
+      console.error('Error in doctor notification:', err);
+      alert('Error notifying doctor by email. Starting video call anyway...');
     }
+    
+    // Start the video call regardless of notification success
     setShowVideoCall(true);
   };
 
