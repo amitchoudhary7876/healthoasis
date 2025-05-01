@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 
 export interface ZegoCallProps {
@@ -9,44 +9,85 @@ export interface ZegoCallProps {
 }
 
 const ZegoCall: React.FC<ZegoCallProps> = ({ roomID, userID, userName, onClose }) => {
-  const myMeeting = async (element: HTMLDivElement) => {
-    // Generate a Kit Token
-    const appID = 64275671;
-    const serverSecret = "2d4a5430b8b2633e9e3d04231c17fde9";
-    const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
-      appID,
-      serverSecret,
-      roomID,
-      userID,
-      userName
-    );
+  const containerRef = useRef<HTMLDivElement>(null);
+  const zegoRef = useRef<any>(null);
 
-    // Create instance object from Kit Token
-    const zp = ZegoUIKitPrebuilt.create(kitToken);
+  useEffect(() => {
+    const initCall = async () => {
+      if (!containerRef.current) return;
+      
+      try {
+        console.log(`Initializing video call in room: ${roomID}`);
+        console.log(`User: ${userID} (${userName})`);
+        
+        // Generate a Kit Token
+        const appID = 64275671;
+        const serverSecret = "2d4a5430b8b2633e9e3d04231c17fde9";
+        
+        // Ensure unique room and user IDs
+        const uniqueRoomID = roomID;
+        const uniqueUserID = userID;
+        
+        // Create token
+        const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
+          appID,
+          serverSecret,
+          uniqueRoomID,
+          uniqueUserID,
+          userName
+        );
+        
+        // Create instance
+        zegoRef.current = ZegoUIKitPrebuilt.create(kitToken);
+        
+        // Join room with enhanced configuration
+        zegoRef.current.joinRoom({
+          container: containerRef.current,
+          sharedLinks: [{
+            name: 'Copy link',
+            url: window.location.href,
+          }],
+          scenario: {
+            mode: ZegoUIKitPrebuilt.OneONoneCall,
+          },
+          showScreenSharingButton: true,
+          showRoomDetailsButton: true,
+          turnOnMicrophoneWhenJoining: true,
+          turnOnCameraWhenJoining: true,
+          showMyCameraToggleButton: true,
+          showMyMicrophoneToggleButton: true,
+          showAudioVideoSettingsButton: true,
+          showTextChat: true,
+          showUserList: true,
+          maxUsers: 2,
+          layout: "Auto",
+          showLayoutButton: false,
+          onLeaveRoom: () => {
+            console.log('User left the room');
+            if (onClose) onClose();
+          },
+        });
+        
+        console.log('Video call initialized successfully');
+      } catch (error) {
+        console.error('Error initializing video call:', error);
+      }
+    };
     
-    // Start the call
-    zp.joinRoom({
-      container: element,
-      turnOnMicrophoneWhenJoining: true,
-      turnOnCameraWhenJoining: true,
-      showMyCameraToggleButton: true,
-      showMyMicrophoneToggleButton: true,
-      showAudioVideoSettingsButton: true,
-      showScreenSharingButton: true,
-      showTextChat: true,
-      showUserList: true,
-      maxUsers: 2,
-      layout: "Auto",
-      showLayoutButton: false,
-      scenario: {
-        mode: "OneOnOneCall" as any,
-        config: {
-          role: "Host" as any,
-        },
-      },
-      onLeaveRoom: onClose,
-    });
-  };
+    initCall();
+    
+    return () => {
+      // Cleanup when component unmounts
+      if (zegoRef.current) {
+        try {
+          zegoRef.current.destroy();
+          console.log('Video call instance destroyed');
+        } catch (error) {
+          console.error('Error destroying video call instance:', error);
+        }
+      }
+    };
+  }, [roomID, userID, userName]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
@@ -62,8 +103,8 @@ const ZegoCall: React.FC<ZegoCallProps> = ({ roomID, userID, userName, onClose }
           </button>
         </div>
         <div
+          ref={containerRef}
           className="w-full h-full"
-          ref={myMeeting}
         />
       </div>
     </div>

@@ -4,7 +4,7 @@ import Layout from '@/components/layout/Layout';
 import PageHeader from '@/components/common/PageHeader';
 import ZegoCall from '@/components/videocall/ZegoCall';
 
-const API_URL = import.meta.env.VITE_REACT_APP_API_URL || 'https://healthoasis-backendf.onrender.com';
+const API_URL = import.meta.env.VITE_REACT_APP_API_URL || 'http://localhost:3001';
 
 // Fallback image URL
 const fallbackImage = 'https://placehold.co/300x400?text=No+Image';
@@ -17,59 +17,31 @@ type Doctor = {
   specialty: string;
   profile_image_url: string;
   availability_status?: 'available' | 'busy' | 'offline';
+  email?: string;
 };
 
 // Card Component
-const DoctorCard = ({ id, name, specialty, image, availability = 'available' }: { id: number; name: string; specialty: string; image: string; availability?: string }) => {
+const DoctorCard = ({ id, name, specialty, image, availability = 'available', doctor }: { id: number; name: string; specialty: string; image: string; availability?: string; doctor: Doctor }) => {
   const [showVideoCall, setShowVideoCall] = useState(false);
-  
-  const handleVideoCall = async (e: React.MouseEvent) => {
+
+  const handleVideoCall = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    // Show loading state to user
-    const loadingToast = window.confirm('Initiating video call. Would you like to notify the doctor by email?');
-    if (!loadingToast) {
-      // User chose not to notify, just open the call
-      setShowVideoCall(true);
-      return;
-    }
-    
-    // Notify doctor by email before opening video call
-    try {
-      console.log(`Sending notification to doctor ${id} (${name})`);
-      
-      const res = await fetch(`${API_URL}/api/notify-doctor`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          doctorEmail: 'adishsingla64@gmail.com', // Replace with dynamic doctor email if available
-          doctorName: name,
-          patientName: 'Patient', // Replace with actual patient name if available
-          doctorId: id,
-          patientId: 1 // TODO: Replace with actual logged-in patient ID
-        })
-      });
-      
-      const data = await res.json();
-      
-      if (res.ok) {
-        console.log('Doctor notification successful:', data);
-        alert('Doctor notified by email! Starting video call...');
-      } else {
-        console.error('Doctor notification failed:', data);
-        alert(`Failed to notify doctor: ${data.message || 'Unknown error'}. Starting video call anyway...`);
-      }
-    } catch (err) {
-      console.error('Error in doctor notification:', err);
-      alert('Error notifying doctor by email. Starting video call anyway...');
-    }
-    
-    // Start the video call regardless of notification success
+    // Open video call immediately
     setShowVideoCall(true);
+    // Send invite in background
+    const user = JSON.parse(localStorage.getItem('userInfo') || '{}');
+    fetch(`${API_URL}/api/video-call/invite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        doctorEmail: 'adishsingla64@gmail.com',
+        patientName: user.name || 'Patient',
+        patientId: user.id || null
+      })
+    }).then(res => res.json()).then(data => console.log('Invite:', data)).catch(console.error);
   };
 
-  
   const closeVideoCall = () => {
     setShowVideoCall(false);
   };
@@ -112,7 +84,7 @@ const DoctorCard = ({ id, name, specialty, image, availability = 'available' }: 
       
       {showVideoCall && (
         <ZegoCall
-          roomID={`doctor-${id}`}
+          roomID={`doctor-${id}-${Date.now()}`}
           userID={`patient-${Date.now()}`}
           userName={`Patient for Dr. ${name}`}
           onClose={closeVideoCall}
@@ -128,35 +100,57 @@ const Doctors = () => {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetch(`${API_URL}/api/doctors`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`Failed to fetch doctors. Status: ${res.status}`);
-        const contentType = res.headers.get('Content-Type');
-        if (!contentType || !contentType.includes('application/json')) {
-          return res.text().then((text) => {
-            throw new Error(`Expected JSON, got:\n${text}`);
-          });
+    console.log('Fetching doctors from:', `${API_URL}/api/doctors`);
+    
+    const fetchDoctors = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/doctors`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          // Don't include credentials to avoid CORS issues
+          credentials: 'omit'
+        });
+
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Error response:', errorText);
+          throw new Error(`Failed to fetch doctors. Status: ${response.status}`);
         }
-        return res.json();
-      })
-      .then((data) => {
-        // console.log('Fetched doctors:', data);
+
+        const contentType = response.headers.get('Content-Type');
+        console.log('Content-Type:', contentType);
+        
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await response.text();
+          console.log('Non-JSON response:', text);
+          throw new Error(`Expected JSON, got non-JSON response`);
+        }
+
+        const data = await response.json();
+        console.log('Fetched doctors data:', data);
+        
         if (Array.isArray(data)) {
           setDoctors(data);
         } else if (data?.data && Array.isArray(data.data)) {
-          // In case the API response is wrapped like { data: [...] }
           setDoctors(data.data);
         } else {
+          console.error('Unexpected data format:', data);
           throw new Error('Unexpected doctors format received');
         }
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error('Error fetching doctors:', err);
-        setError(err.message || 'Something went wrong');
-      })
-      .finally(() => {
+        setError(err instanceof Error ? err.message : 'Something went wrong');
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+
+    fetchDoctors();
   }, []);
 
   return (
@@ -190,6 +184,7 @@ const Doctors = () => {
                     specialty={doctor.specialization}
                     image={doctor.profile_image_url || fallbackImage}
                     availability={doctor.availability_status || 'available'}
+                    doctor={doctor}
                   />
                 </div>
               ))}

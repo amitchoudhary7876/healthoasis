@@ -30,7 +30,7 @@ const DoctorCall = () => {
       })
       .catch((err) => {
         console.error('Error fetching doctor:', err);
-        setError(err.message || 'Something went wrong');
+        setError(err.message || 'Something went wrong fetching doctor details.');
         setLoading(false);
       });
   }, [doctorId, API_URL]);
