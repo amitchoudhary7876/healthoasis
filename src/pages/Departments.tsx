@@ -4,7 +4,9 @@ import PageHeader from '@/components/common/PageHeader';
 import { Link } from 'react-router-dom';
 import * as LucideIcons from 'lucide-react';
 
-const API_URL = `${import.meta.env.VITE_REACT_APP_API_URL}/api/departments`;
+// Base backend URL
+const BASE_URL = import.meta.env.DEV ? 'http://localhost:3000' : import.meta.env.VITE_REACT_APP_API_URL;
+const API_URL = `${BASE_URL}/api/departments`;
 
 // Type for Department
 interface Department {
@@ -88,21 +90,20 @@ const Departments = () => {
   };
 
   // Map department names to icons
-  const departmentIcons: { [key: string]: keyof typeof LucideIcons } = {
-    Cardiology: 'HeartPulse',
-    Neurology: 'Brain',
-    Pediatrics: 'Baby',
-    Orthopedics: 'Bone',
-    Ophthalmology: 'Eye',
-    'General Medicine': 'Stethoscope',
-    Pulmonology: 'Lungs',
-    'Emergency Medicine': 'Siren',
+  const departmentIcons: { [key: string]: React.ComponentType<React.SVGProps<SVGSVGElement>> } = {
+    Cardiology: LucideIcons.HeartPulse,
+    Neurology: LucideIcons.Brain,
+    Pediatrics: LucideIcons.Baby,
+    Orthopedics: LucideIcons.Bone,
+    Ophthalmology: LucideIcons.Eye,
+    'General Medicine': LucideIcons.Stethoscope,
+    Pulmonology: LucideIcons.Wind,
+    'Emergency Medicine': LucideIcons.Siren,
   };
 
   const getIcon = (departmentName: string) => {
-    const iconName = departmentIcons[departmentName];
-    const IconComponent = LucideIcons[iconName] || LucideIcons.LayoutPanelTop;
-    return <IconComponent size={28} />;
+    const Icon = departmentIcons[departmentName] || LucideIcons.LayoutPanelTop;
+    return <Icon size={28} />;
   };
 
   // Log departments state before rendering
@@ -116,17 +117,17 @@ const Departments = () => {
         <div className="container-custom">
           {loading && <p>Loading departments...</p>}
           {error && (
-  <div className="min-h-[40vh] flex flex-col items-center justify-center bg-gray-50">
-    <div className="text-center">
-      <h1 className="text-healthoasis-blue text-6xl font-bold">404</h1>
-      <h2 className="text-2xl font-bold mb-2">Departments Not Found</h2>
-      <p className="text-lg text-gray-600 mb-6 max-w-md mx-auto">
-        We're sorry, the departments you were looking for couldn't be loaded or don't exist.
-      </p>
-      <a href="/" className="primary-button inline-flex items-center">Return to Home</a>
-    </div>
-  </div>
-)}
+            <div className="min-h-[40vh] flex flex-col items-center justify-center bg-gray-50">
+              <div className="text-center">
+                <h1 className="text-healthoasis-blue text-6xl font-bold">Error</h1>
+                <h2 className="text-2xl font-bold mb-2">{error}</h2>
+                <p className="text-lg text-gray-600 mb-6 max-w-md mx-auto">
+                  There was a problem loading departments.
+                </p>
+                <a href="/" className="primary-button inline-flex items-center">Return to Home</a>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {departments.map((dept) => (

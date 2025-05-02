@@ -2,9 +2,12 @@
 
 interface ImportMetaEnv extends Readonly<Record<string, string>> {
   readonly VITE_REACT_APP_API_URL: string;
+  readonly DEV: string;
 }
 
-const API_BASE_URL = import.meta.env.VITE_REACT_APP_API_URL;
+const API_BASE_URL = import.meta.env.DEV
+  ? 'http://localhost:3000'
+  : (import.meta.env.VITE_REACT_APP_API_URL || 'https://healthoasis-backendf.onrender.com');
 
 export interface Transaction {
   id: string;

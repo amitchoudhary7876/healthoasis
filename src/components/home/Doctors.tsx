@@ -9,8 +9,9 @@ type Doctor = {
   phone: string;
   profile_image_url: string;
 };
+console.log()
 
-const API_URL = import.meta.env.VITE_REACT_APP_API_URL || 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_REACT_APP_API_URL || 'http://localhost:3000';
 
 const DoctorCard = ({ doctor }: { doctor: Doctor }) => {
   return (
@@ -71,6 +72,7 @@ const Doctors = () => {
     };
 
     fetchDoctors();
+    console.log(doctors)
   }, []);
 
   return (

@@ -33,7 +33,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({ doctorId, doctorName, o
   const callStartTimeRef = useRef<number | null>(null);
 
   const API_URL = import.meta.env.VITE_REACT_APP_API_URL;
-  const SOCKET_URL = import.meta.env.REACT_APP_SOCKET_URL || API_URL;
+  const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_URL;
 
   useEffect(() => {
     const initializeCall = async () => {

@@ -4,7 +4,7 @@ import Layout from '@/components/layout/Layout';
 import PageHeader from '@/components/common/PageHeader';
 import ZegoCall from '@/components/videocall/ZegoCall';
 
-const API_URL = import.meta.env.VITE_REACT_APP_API_URL || 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_REACT_APP_API_URL || 'http://localhost:3000';
 
 // Fallback image URL
 const fallbackImage = 'https://placehold.co/300x400?text=No+Image';

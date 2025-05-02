@@ -15,7 +15,9 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 
 // Define API base URL at the top (replace with your actual backend URL)
-const API_URL = import.meta.env.VITE_REACT_APP_API_URL;
+const API_URL = import.meta.env.DEV
+  ? 'http://localhost:3000'
+  : import.meta.env.VITE_REACT_APP_API_URL;
 
 const Navbar = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);

@@ -6,7 +6,7 @@ const Footer = () => {
   const [workingHours, setWorkingHours] = useState([]);
 
   useEffect(() => {
-    const API_URL = import.meta.env.VITE_REACT_APP_API_URL;
+    const API_URL = import.meta.env.VITE_REACT_APP_API_URL || 'http://localhost:3000';
     fetch(`${API_URL}/api/working-hours`)
       .then((res) => res.json())
       .then((data) => setWorkingHours(data))
@@ -93,7 +93,7 @@ const Footer = () => {
       </div>
       <div className="bg-healthoasis-blue dark:bg-gray-800 border-t border-white/20 dark:border-gray-700 py-4 transition-colors">
         <div className="container-custom text-center text-sm text-white/90 dark:text-gray-400">
-          <p>© 2025 HealthOasis. All rights reserved.</p>
+          <p> 2025 HealthOasis. All rights reserved.</p>
         </div>
       </div>
     </footer>
